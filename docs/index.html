@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>赢球关键指标</title>
+<meta name="description" content="2022/23 英超、西甲、欧冠：哪些技术统计对赢球最关键？基于 1,500+ 场次球队数据的相关分析、Logistic 回归与随机森林。">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --pos: #2a78d6; --neg: #e34948; --mid: #f0efec; --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --pos: #3987e5; --neg: #e66767; --mid: #383835; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --pos: #3987e5; --neg: #e66767; --mid: #383835; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 16px/1.65 system-ui, -apple-system, "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif; }
+main { max-width: 960px; margin: 0 auto; padding: 40px 16px 80px; }
+header h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+header p { color: var(--ink2); margin: 0 0 4px; }
+.links { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; }
+.links a { color: var(--ink); text-decoration: none; border: 1px solid var(--border); background: var(--surface);
+  padding: 6px 12px; border-radius: 8px; font-size: 14px; }
+.links a:hover { border-color: var(--accent); }
+h2 { font-size: 22px; margin: 56px 0 6px; }
+h3 { font-size: 16px; margin: 0 0 2px; }
+.sub { color: var(--ink2); margin: 0 0 16px; font-size: 15px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 28px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.tile .v { font-size: 32px; font-weight: 650; line-height: 1.1; }
+.tile .l { color: var(--ink2); font-size: 14px; margin-top: 6px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 16px; }
+.card .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid2 > * { min-width: 0; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; padding: 10px 0;
+  background: var(--page); }
+.filters button, .seg button { font: inherit; font-size: 14px; color: var(--ink2); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; cursor: pointer; }
+.filters button[aria-pressed="true"], .seg button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); font-weight: 600; }
+.seg { display: flex; gap: 6px; margin: 0 0 10px; flex-wrap: wrap; }
+.chart { width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 12px; font-family: inherit; }
+.chart .lbl { fill: var(--ink2); font-size: 13px; }
+.chart .val { fill: var(--ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink2); margin: 0 0 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+#tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; max-width: 260px; }
+#tip b { font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; white-space: nowrap; }
+th, td { white-space: nowrap; }
+th { color: var(--ink2); font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+ol.findings { padding-left: 22px; }
+ol.findings li { margin: 0 0 10px; }
+ol.findings b { font-weight: 650; }
+footer { color: var(--muted); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--grid); padding-top: 16px; }
+footer a { color: var(--ink2); }
+details summary { cursor: pointer; color: var(--ink2); font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>什么指标对赢球最关键？</h1>
+  <p>2022/23 赛季 · 英超 · 西甲 · 欧冠 — 每项技术统计都换成"本队 − 对手"的差值，再看它和胜利的关系。</p>
+  <div class="links">
+    <a href="https://colab.research.google.com/github/uhonglim/football-win-factors/blob/main/analysis.ipynb">在 Colab 打开分析 ↗</a>
+    <a href="https://github.com/uhonglim/football-win-factors">GitHub 仓库 ↗</a>
+    <a href="results.json">原始结果 JSON</a>
+  </div>
+  <div class="tiles" id="tiles"></div>
+</header>
+
+<h2>结论速览</h2>
+<ol class="findings">
+  <li><b>射正是赢球第一指标。</b>单场相关 0.46–0.60，赛季相关 0.82，模型重要性是第二名的 2–4 倍。射正比对手多 3 次，胜率 63%–74%。</li>
+  <li><b>射正 &gt; 射门。</b>射门次数的相关（≈0.3）远低于射正（≈0.5），质量比数量重要。</li>
+  <li><b>控球是"强队标志"，不是"赢球按钮"。</b>单场控球与胜负相关只有 0.12（英超 0.13、西甲 0.05），领先方常主动让出球权；赛季层面却达到 0.68。欧冠单场控球更重要（0.30）。</li>
+  <li><b>防守和传中数据要反着读。</b>解围、长传多常意味着在保护领先；传中多常意味着在追分。</li>
+  <li><b>红牌在三项赛事里都是负面因素</b>，欧冠最明显。主场优势约 19–20 个百分点，三项赛事几乎一样。</li>
+</ol>
+
+<div class="filters" role="group" aria-label="赛事筛选" id="filters"></div>
+
+<h2>1 · 单场：哪项统计和胜利最相关？</h2>
+<p class="sub">差值（本队 − 对手）与"是否赢球"的相关系数 r。正值越大，占优时越容易赢。</p>
+<div class="card"><div class="chart" id="c-corr"></div>
+  <p class="note">蓝 = 正相关，红 = 负相关。射门类指标在最上方，控球率排在中段。</p></div>
+
+<h2>2 · 赢下这项"对决"，胜率多少？</h2>
+<p class="sub">一支球队在某项统计上多于对手时的胜率。虚线是该赛事的整体胜率基准。</p>
+<div class="card"><div class="chart" id="c-battle"></div></div>
+
+<h2>3 · 控制其它指标后，谁的独立贡献最大？</h2>
+<p class="sub">标准化 Logistic 回归系数：其它指标不变时，该差值增加 1 个标准差对赢球几率的影响。</p>
+<div class="card">
+  <div class="tiles" id="auc" style="margin:0 0 16px"></div>
+  <div class="chart" id="c-coef"></div>
+  <p class="note">控制射门之后，控球率转为正贡献；传中次数是最大的负系数（落后方的典型行为）；解围、长传为正是"领先后收缩"的结果，不是原因。</p>
+</div>
+
+<h2>4 · 每多一次射正，胜率涨多少？</h2>
+<p class="sub">按射正差值（±6 截断）分组的胜率。三项赛事同时显示，不受上方筛选影响。</p>
+<div class="card"><div class="legend" id="l-sot"></div><div class="chart" id="c-sot"></div></div>
+
+<h2>5 · 控球悖论：单场 vs 整个赛季</h2>
+<p class="sub">单场数据会被比分牵着走（领先 → 收缩）。把英超、西甲 40 支球队的赛季场均差值和场均积分放在一起，结论变了。</p>
+<div class="tiles" id="paradox" style="margin-top:0"></div>
+<div class="grid2">
+  <div class="card">
+    <h3>赛季场均差值 vs 场均积分</h3>
+    <div class="seg" role="group" aria-label="横轴指标" id="seg-x"></div>
+    <div class="legend" id="l-sc"></div>
+    <div class="chart" id="c-scatter"></div>
+  </div>
+  <div class="card">
+    <h3>赛季层面相关系数（两联赛合并）</h3>
+    <p class="note" style="margin:0 0 10px">球队场均差值 与 场均积分 的相关</p>
+    <div class="chart" id="c-season"></div>
+  </div>
+</div>
+
+<h2>6 · 主场优势 &amp; 数据稳健性</h2>
+<div class="grid2">
+  <div class="card"><h3>主客场胜率</h3><div class="tablewrap"><table id="t-home"></table></div></div>
+  <div class="card"><h3>换一个数据源结果一样吗？</h3>
+    <p class="note" style="margin:0 0 8px">football-data.co.uk 全部 380 场 vs 本分析（ESPN）的相关系数</p>
+    <div class="tablewrap"><table id="t-robust"></table></div></div>
+</div>
+
+<h2>方法 &amp; 数据</h2>
+<div class="card">
+  <p style="margin-top:0"><b>数据</b>：ESPN 公开比赛数据，2022/23 赛季英超 380、西甲 375、欧冠（小组赛起）125 场。ESPN 有 108 场技术统计缺失，另有 6 场无法计算比率，剔除后分析 <span id="n-used"></span>。每场比赛拆成主、客两个视角。</p>
+  <p><b>特征</b>：19 项技术统计的"本队 − 对手"差值。进球、助攻、扑救（会泄露比分）不作为特征；传球次数与控球率相关 0.96，只保留控球率。</p>
+  <p><b>方法</b>：单变量相关与"对决胜率"；标准化 Logistic 回归与随机森林（5 折交叉验证 AUC、置换重要性）；赛季层面球队场均差值与场均积分的相关。</p>
+  <p style="margin-bottom:0"><b>局限</b>：技术统计与比分互相影响，相关 ≠ 因果；没有 xG；欧冠淘汰赛加时进球计入比分，点球大战按平局处理。</p>
+</div>
+
+<footer>数据：ESPN、football-data.co.uk · 分析代码见 <a href="https://github.com/uhonglim/football-win-factors">GitHub</a> · 仅供学习研究</footer>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const COMPS = ["英超", "西甲", "欧冠", "全部"];
+const SERIES = { "英超": "--s1", "西甲": "--s2", "欧冠": "--s3" };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const pct = v => (v * 100).toFixed(1) + "%";
+const f2 = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+const NS = "http://www.w3.org/2000/svg";
+let R, comp = "全部", xKey = "sot";
+
+const tip = document.getElementById("tip");
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+  const y = e.clientY + 14 + tip.offsetHeight > innerHeight ? e.clientY - tip.offsetHeight - 10 : e.clientY + 14;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => tip.style.opacity = 0;
+
+function el(tag, attrs = {}, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function txt(parent, x, y, s, attrs = {}) { const t = el("text", { x, y, ...attrs }, parent); t.textContent = s; return t; }
+
+// rounded data-end bar: 4px radius at the end away from zero
+function barPath(x0, x1, y, h) {
+  const r = Math.min(4, Math.abs(x1 - x0) / 2, h / 2);
+  if (x1 >= x0) return `M${x0},${y}H${x1 - r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 - r},${y + h}H${x0}Z`;
+  return `M${x0},${y}H${x1 + r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 + r},${y + h}H${x0}Z`;
+}
+
+// horizontal bar chart; items: {label, value, color, tip}
+function hbar(id, items, { min, max, fmt, ref, refLabel, ticks }) {
+  const box = document.getElementById(id); box.innerHTML = "";
+  const W = box.clientWidth, labelW = W < 420 ? 78 : 96, valW = 52, rowH = 26, barH = 14, top = 6, bottom = 24;
+  const H = top + items.length * rowH + bottom;
+  const svg = el("svg", { width: W, height: H, role: "img" }, box);
+  const x = v => labelW + (v - min) / (max - min) * (W - labelW - valW);
+  for (const t of ticks) {
+    el("line", { x1: x(t), x2: x(t), y1: top, y2: H - bottom, stroke: css(t === 0 ? "--axis" : "--grid"), "stroke-width": 1 }, svg);
+    txt(svg, x(t), H - 6, fmt(t, true), { "text-anchor": "middle" });
+  }
+  const zero = x(Math.max(min, 0));
+  items.forEach((d, i) => {
+    const y = top + i * rowH;
+    txt(svg, labelW - 8, y + rowH / 2 + 4, d.label, { "text-anchor": "end", class: "lbl" });
+    el("path", { d: barPath(zero, x(d.value), y + (rowH - barH) / 2, barH), fill: d.color }, svg);
+    const vx = d.value >= 0 ? Math.max(x(d.value), zero) + 6 : x(d.value) - 6;
+    txt(svg, vx, y + rowH / 2 + 4, fmt(d.value), { class: "val", "text-anchor": d.value >= 0 ? "start" : "end" });
+    const hit = el("rect", { x: 0, y, width: W, height: rowH, fill: "transparent" }, svg);
+    hit.addEventListener("mousemove", e => showTip(e, d.tip));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+  if (ref != null) {
+    el("line", { x1: x(ref), x2: x(ref), y1: top - 4, y2: H - bottom, stroke: css("--ink2"), "stroke-dasharray": "4 3", "stroke-width": 1 }, svg);
+    txt(svg, x(ref) + 4, top + 6, refLabel, { class: "val" });
+  }
+}
+
+function renderComp() {
+  const F = R.features, b = R.battle[comp];
+  document.querySelectorAll("#filters button").forEach(btn => btn.setAttribute("aria-pressed", btn.dataset.c === comp));
+  const keys = Object.keys(F);
+  // 1 correlation
+  const corr = keys.map(k => ({ k, v: b[k]["相关系数r(差值,胜)"] })).sort((a, c) => c.v - a.v);
+  hbar("c-corr", corr.map(d => ({ label: F[d.k], value: d.v, color: css(d.v >= 0 ? "--pos" : "--neg"),
+    tip: `<b>${F[d.k]}</b> · ${comp}<br>r（差值, 赢球）= ${d.v.toFixed(3)}<br>r（差值, 净胜球）= ${b[d.k]["相关系数r(差值,净胜球)"].toFixed(3)}` })),
+    { min: -0.4, max: 0.65, ticks: [-0.4, -0.2, 0, 0.2, 0.4, 0.6], fmt: (v, t) => t ? v.toFixed(1) : v.toFixed(2) });
+  // 2 battle win rate
+  const base = comp === "全部" ? meanWin() : R.meta.results[comp].W;
+  const bw = keys.map(k => ({ k, v: b[k]["领先时胜率"] })).sort((a, c) => c.v - a.v);
+  hbar("c-battle", bw.map(d => ({ label: F[d.k], value: d.v, color: css(d.v >= base ? "--pos" : "--neg"),
+    tip: `<b>${F[d.k]}</b> 多于对手时 · ${comp}<br>胜率 ${pct(d.v)}，场均积分 ${b[d.k]["领先时场均积分"].toFixed(2)}<br>少于对手时胜率 ${pct(b[d.k]["落后时胜率"])}` })),
+    { min: 0, max: 0.8, ticks: [0, 0.2, 0.4, 0.6, 0.8], fmt: (v, t) => t ? Math.round(v * 100) + "%" : pct(v), ref: base, refLabel: `基准 ${pct(base)}` });
+  // 3 coefficients
+  const m = R.models[comp];
+  document.getElementById("auc").innerHTML =
+    tile(m.auc_lr.toFixed(3), "Logistic 回归 AUC（5 折交叉验证）") +
+    tile(m.auc_rf.toFixed(3), "随机森林 AUC") +
+    tile(R.process_models[comp].auc_lr.toFixed(3), "去掉射门类指标后的 AUC");
+  const co = keys.map(k => ({ k, v: m.coef[k] })).sort((a, c) => c.v - a.v);
+  hbar("c-coef", co.map(d => ({ label: F[d.k], value: d.v, color: css(d.v >= 0 ? "--pos" : "--neg"),
+    tip: `<b>${F[d.k]}</b> · ${comp}<br>标准化系数 ${f2(d.v)}<br>随机森林置换重要性 ${m.imp[d.k].toFixed(3)}` })),
+    { min: -1.6, max: 1.8, ticks: [-1.5, -1, -0.5, 0, 0.5, 1, 1.5], fmt: (v, t) => t ? String(v) : f2(v) });
+}
+function meanWin() { const w = COMPS.slice(0, 3).map(c => R.meta.results[c].W); return w.reduce((a, c) => a + c) / 3; }
+const tile = (v, l) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+
+function legend(id) {
+  document.getElementById(id).innerHTML = Object.entries(SERIES).filter(([c]) => id !== "l-sc" || c !== "欧冠")
+    .map(([c, v]) => `<span><i style="background:var(${v})"></i>${c}</span>`).join("");
+}
+
+function sotChart() {
+  const box = document.getElementById("c-sot"); box.innerHTML = "";
+  const W = box.clientWidth, H = 300, l = 44, r = 56, t = 10, b = 34;
+  const svg = el("svg", { width: W, height: H }, box);
+  const xs = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+  const x = v => l + (v + 6) / 12 * (W - l - r), y = v => t + (1 - v) * (H - t - b);
+  for (const g of [0, 0.25, 0.5, 0.75, 1]) {
+    el("line", { x1: l, x2: W - r, y1: y(g), y2: y(g), stroke: css(g === 0 ? "--axis" : "--grid") }, svg);
+    txt(svg, l - 8, y(g) + 4, Math.round(g * 100) + "%", { "text-anchor": "end" });
+  }
+  for (const v of xs) if (W > 480 || v % 2 === 0) txt(svg, x(v), H - 14, (v > 0 ? "+" : "") + v + (Math.abs(v) === 6 ? "+" : ""), { "text-anchor": "middle" });
+  txt(svg, (l + W - r) / 2, H, "射正差值（本队 − 对手）", { "text-anchor": "middle" });
+  const cross = el("line", { y1: t, y2: H - b, stroke: css("--axis"), opacity: 0 }, svg);
+  const comps = ["英超", "西甲", "欧冠"];
+  const dots = {};
+  comps.forEach(c => {
+    const col = css(SERIES[c]);
+    const pts = xs.map(v => [x(v), y(R.sot_curve[c][String(v)])]);
+    el("path", { d: "M" + pts.map(p => p.join(",")).join("L"), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    pts.forEach(p => el("circle", { cx: p[0], cy: p[1], r: 3, fill: col }, svg));
+    dots[c] = el("circle", { r: 5, fill: col, stroke: css("--surface"), "stroke-width": 2, opacity: 0 }, svg);
+  });
+  // direct labels at the right end, de-collided
+  const ends = comps.map(c => ({ c, y: y(R.sot_curve[c]["6"]) })).sort((a, c) => a.y - c.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+  ends.forEach(e => txt(svg, W - r + 8, e.y + 4, e.c, { class: "lbl" }));
+  const hit = el("rect", { x: l, y: t, width: Math.max(0, W - l - r), height: H - t - b, fill: "transparent" }, svg);
+  hit.addEventListener("mousemove", e => {
+    const rect = svg.getBoundingClientRect();
+    const v = Math.max(-6, Math.min(6, Math.round(((e.clientX - rect.left) - l) / (W - l - r) * 12 - 6)));
+    cross.setAttribute("x1", x(v)); cross.setAttribute("x2", x(v)); cross.setAttribute("opacity", 1);
+    comps.forEach(c => { dots[c].setAttribute("cx", x(v)); dots[c].setAttribute("cy", y(R.sot_curve[c][String(v)])); dots[c].setAttribute("opacity", 1); });
+    showTip(e, `<b>射正差值 ${(v > 0 ? "+" : "") + v}${Math.abs(v) === 6 ? " 及以上" : ""}</b><br>` +
+      comps.map(c => `<span style="color:var(${SERIES[c]})">●</span> ${c} 胜率 ${pct(R.sot_curve[c][String(v)])}`).join("<br>"));
+  });
+  hit.addEventListener("mouseleave", () => { hideTip(); cross.setAttribute("opacity", 0); comps.forEach(c => dots[c].setAttribute("opacity", 0)); });
+}
+
+function scatter() {
+  document.querySelectorAll("#seg-x button").forEach(btn => btn.setAttribute("aria-pressed", btn.dataset.k === xKey));
+  const box = document.getElementById("c-scatter"); box.innerHTML = "";
+  const W = box.clientWidth, H = 300, l = 40, r = 12, t = 10, b = 36;
+  const svg = el("svg", { width: W, height: H }, box);
+  const all = ["英超", "西甲"].flatMap(c => R.season_teams[c].map(d => ({ ...d, c })));
+  const xv = all.map(d => d[xKey]); const xmin = Math.floor(Math.min(...xv)), xmax = Math.ceil(Math.max(...xv));
+  const x = v => l + (v - xmin) / (xmax - xmin) * (W - l - r), y = v => t + (1 - v / 2.75) * (H - t - b);
+  for (const g of [0, 0.5, 1, 1.5, 2, 2.5]) {
+    el("line", { x1: l, x2: W - r, y1: y(g), y2: y(g), stroke: css(g === 0 ? "--axis" : "--grid") }, svg);
+    txt(svg, l - 6, y(g) + 4, g.toFixed(1), { "text-anchor": "end" });
+  }
+  const step = (xmax - xmin) > 20 ? 10 : (xmax - xmin) > 8 ? 2 : 1;
+  for (let v = Math.ceil(xmin / step) * step; v <= xmax; v += step) {
+    el("line", { x1: x(v), x2: x(v), y1: t, y2: H - b, stroke: css(v === 0 ? "--axis" : "--grid") }, svg);
+    txt(svg, x(v), H - 18, (v > 0 ? "+" : "") + v, { "text-anchor": "middle" });
+  }
+  txt(svg, (l + W - r) / 2, H - 2, xKey === "sot" ? "场均射正差值" : "场均控球率差值（百分点）", { "text-anchor": "middle" });
+  txt(svg, l + 4, t + 10, "场均积分", {});
+  all.forEach(d => {
+    const c = el("circle", { cx: x(d[xKey]), cy: y(d.ppg), r: 5, fill: css(SERIES[d.c]), stroke: css("--surface"), "stroke-width": 2 }, svg);
+    const hit = el("circle", { cx: x(d[xKey]), cy: y(d.ppg), r: 10, fill: "transparent" }, svg);
+    hit.addEventListener("mousemove", e => showTip(e, `<b>${d.team}</b> · ${d.c}<br>场均积分 ${d.ppg.toFixed(2)}<br>场均射正差 ${f2(d.sot)}<br>场均控球差 ${f2(d.pos)} 个百分点`));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+}
+
+function seasonChart() {
+  const F = R.features;
+  const items = Object.keys(F).map(k => ({ k, v: R.season_corr_pooled[k] })).sort((a, c) => c.v - a.v);
+  hbar("c-season", items.map(d => ({ label: F[d.k], value: d.v, color: css(d.v >= 0 ? "--pos" : "--neg"),
+    tip: `<b>${F[d.k]}</b><br>两联赛合并 r = ${d.v.toFixed(2)}<br>英超 r = ${R.season_corr["英超"][d.k].toFixed(2)}<br>西甲 r = ${R.season_corr["西甲"][d.k].toFixed(2)}` })),
+    { min: -0.8, max: 1, ticks: [-0.5, 0, 0.5, 1], fmt: (v, t) => t ? v.toFixed(1) : v.toFixed(2) });
+}
+
+function tables() {
+  document.getElementById("t-home").innerHTML = "<tr><th>赛事</th><th>主场胜率</th><th>客场胜率</th><th>主场加成（百分点）</th></tr>" +
+    ["英超", "西甲", "欧冠"].map(c => { const h = R.home[c]; return `<tr><td>${c}</td><td>${pct(h["主场胜率"])}</td><td>${pct(h["客场胜率"])}</td><td>+${h["主场加成(百分点)"].toFixed(1)}</td></tr>`; }).join("");
+  const rb = R.robust, rows = Object.keys(rb["football-data (380场)|英超"]);
+  document.getElementById("t-robust").innerHTML = "<tr><th>指标</th><th>英超 FD</th><th>英超 ESPN</th><th>西甲 FD</th><th>西甲 ESPN</th></tr>" +
+    rows.map(k => `<tr><td>${k}</td>${["football-data (380场)|英超", "ESPN (本分析)|英超", "football-data (380场)|西甲", "ESPN (本分析)|西甲"].map(c => `<td>${rb[c][k].toFixed(3)}</td>`).join("")}</tr>`).join("");
+}
+
+function renderAll() { renderComp(); sotChart(); scatter(); seasonChart(); }
+
+fetch("results.json").then(r => r.json()).then(data => {
+  R = data;
+  const n = R.meta.matches, total = n["英超"] + n["西甲"] + n["欧冠"];
+  document.getElementById("n-used").textContent = `英超 ${n["英超"]}、西甲 ${n["西甲"]}、欧冠 ${n["欧冠"]} 场`;
+  const sot = R.battle["全部"].shotsOnTarget;
+  document.getElementById("tiles").innerHTML =
+    tile(total.toLocaleString(), "场比赛（英超 · 西甲 · 欧冠）") +
+    tile("射正", "与胜利相关最高的指标（r = " + sot["相关系数r(差值,胜)"].toFixed(2) + "）") +
+    tile(pct(sot["领先时胜率"]), "射正多于对手时的胜率") +
+    tile(R.models["全部"].auc_lr.toFixed(2), "只用技术统计预测胜负的 AUC");
+  const SP = R.season_corr_pooled;
+  document.getElementById("paradox").innerHTML =
+    tile(R.battle["全部"].possessionPct["相关系数r(差值,胜)"].toFixed(2), "单场：控球率差值与赢球的相关") +
+    tile(SP.possessionPct.toFixed(2), "赛季：控球率差值与场均积分的相关") +
+    tile(SP.shotsOnTarget.toFixed(2), "赛季：射正差值与场均积分的相关");
+  document.getElementById("filters").innerHTML = COMPS.map(c => `<button data-c="${c}" aria-pressed="false">${c}</button>`).join("");
+  document.querySelectorAll("#filters button").forEach(btn => btn.onclick = () => { comp = btn.dataset.c; renderComp(); });
+  document.getElementById("seg-x").innerHTML = `<button data-k="sot">射正差值</button><button data-k="pos">控球率差值</button>`;
+  document.querySelectorAll("#seg-x button").forEach(btn => btn.onclick = () => { xKey = btn.dataset.k; scatter(); });
+  legend("l-sot"); legend("l-sc"); tables(); renderAll();
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderAll, 120); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+});
+</script>
+</body>
+</html>
