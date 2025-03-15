@@ -4,6 +4,12 @@
 
 🌐 **网站**：https://uhonglim.github.io/football-win-factors/
 
+## In plain English
+
+We looked at 767 matches from the 2022/23 Premier League, La Liga and Champions League, and compared 20 stats between the two teams in each game. The stat that matters most is shots on target: a team with 3 more than its opponent wins about 60 to 70% of the time. Having more of the ball is a sign of a strong team, but it doesn't decide a single match.
+
+**How to win:** take better shots, use possession to create chances, avoid red cards, and make home games count. These are patterns in the data, not guaranteed causes.
+
 ## 核心结论
 
 1. **射正是赢球第一指标**：单场相关 0.46–0.60，赛季相关 0.82；射正比对手多 3 次，胜率 63%–74%。
