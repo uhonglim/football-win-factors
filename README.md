@@ -1,41 +1,39 @@
-# 什么指标对赢球最关键？— 2022/23 英超 · 西甲 · 欧冠
+# What wins football matches? Premier League, La Liga and Champions League, 2022/23
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/uhonglim/football-win-factors/blob/main/analysis.ipynb)
 
-🌐 **网站**：https://uhonglim.github.io/football-win-factors/
+**Website:** https://uhonglim.github.io/football-win-factors/
 
-## In plain English
+We compared 18 match stats across 767 games from the 2022/23 Premier League, La Liga and Champions League. The stat that matters most is shots on target: teams with more than their opponent won 63% of matches, and teams with three more won two in three. Teams with more of the ball won only 43%. Possession marks a strong team over a season, but it doesn't decide a single match.
 
-We looked at 767 matches from the 2022/23 Premier League, La Liga and Champions League, and compared 20 stats between the two teams in each game. The stat that matters most is shots on target: a team with 3 more than its opponent wins about 60 to 70% of the time. Having more of the ball is a sign of a strong team, but it doesn't decide a single match.
+## Findings
 
-**How to win:** take better shots, use possession to create chances, avoid red cards, and make home games count. These are patterns in the data, not guaranteed causes.
+1. **Shots on target matters most.** Correlation with winning is 0.46 to 0.60 per match and 0.82 per season, and its model importance is 2 to 4 times the next stat.
+2. **Shots on target beat shots.** Total shots correlates around 0.3 with winning, shots on target around 0.5.
+3. **Possession marks a strong team but doesn't decide a match.** Per match the correlation is 0.12; per season it is 0.68. Teams that lead often give up the ball.
+4. **Some stats follow the score.** Many clearances and long balls usually mean protecting a lead; many crosses usually mean chasing the game.
+5. **Red cards hurt** in all three competitions. **Home advantage** is about 20 percentage points.
 
-## 核心结论
+**How to win:** take better shots, use the ball to create chances, keep eleven players on the pitch, and make home games count. These are patterns in the data, not guaranteed causes.
 
-1. **射正是赢球第一指标**：单场相关 0.46–0.60，赛季相关 0.82；射正比对手多 3 次，胜率 63%–74%。
-2. **射正 > 射门**：射门次数的相关（≈0.3）远低于射正（≈0.5）。
-3. **控球是"强队标志"，不是"赢球按钮"**：单场相关只有 0.12，赛季层面达到 0.68。
-4. **解围、长传、传中要反着读**：它们更多反映比分状态（领先收缩 / 落后追分）。
-5. **红牌**在三项赛事里都是负面因素；主场优势约 19–20 个百分点。
+## Files
 
-## 文件
-
-| 文件 | 说明 |
+| File | What it is |
 |---|---|
-| `analysis.ipynb` | Colab 分析 notebook（可直接在 Colab 运行） |
-| `fetch_data.py` | 从 ESPN 公开接口抓取 2022/23 比赛技术统计 |
-| `data/matches_2223.csv` | 抓取结果，每场比赛两行（主/客视角） |
-| `data/fd_*_2223.csv` | football-data.co.uk 英超/西甲全量数据，用于稳健性检验 |
-| `docs/` | GitHub Pages 网站（`index.html` + notebook 导出的 `results.json`） |
-| `build_notebook.py` | 生成 notebook 的脚本 |
+| `analysis.ipynb` | The analysis notebook (runs in Colab) |
+| `fetch_data.py` | Downloads 2022/23 match stats from ESPN's public API |
+| `data/matches_2223.csv` | The downloaded data, two rows per match (one per team) |
+| `data/fd_*_2223.csv` | football-data.co.uk Premier League and La Liga data, used as a cross-check |
+| `docs/` | The website (`index.html` and `results.json` exported by the notebook) |
+| `build_notebook.py` | Script that generates the notebook |
 
-## 本地运行
+## Run it locally
 
 ```bash
-pip install pandas numpy scikit-learn matplotlib seaborn requests
-python fetch_data.py            # 可选：重新抓取数据
-jupyter nbconvert --to notebook --execute --inplace analysis.ipynb   # 会更新 docs/results.json
-python -m http.server -d docs   # 预览网站
+pip install pandas numpy scikit-learn matplotlib seaborn requests jupyter
+python fetch_data.py            # optional: download the data again
+jupyter nbconvert --to notebook --execute --inplace analysis.ipynb   # also updates docs/results.json
+python -m http.server -d docs   # preview the website
 ```
 
-数据来源：ESPN、football-data.co.uk。仅供学习研究。
+Data: ESPN and football-data.co.uk. For learning and research.
