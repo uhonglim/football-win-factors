@@ -48,7 +48,6 @@ a { color: inherit; }
 
 /* hero */
 .hero { padding-top: 56px; padding-bottom: 24px; }
-.kicker { font-size: 14px; color: var(--ink2); margin: 0 0 18px; }
 .hero h1 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: clamp(40px, 7vw, 76px);
   line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 20px; max-width: 14ch; }
 .lede { font-size: clamp(18px, 2.2vw, 21px); color: var(--ink2); margin: 0; max-width: 34em; }
@@ -63,7 +62,6 @@ a { color: inherit; }
 
 /* sections */
 section { padding: 64px 0 8px; }
-.eyebrow { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-variant-numeric: tabular-nums; }
 h2 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: clamp(30px, 4.4vw, 44px);
   line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 16px; max-width: 20ch; }
 h3 { font-size: 17px; margin: 0 0 4px; }
@@ -147,9 +145,8 @@ footer a { color: var(--ink2); }
 <body>
 
 <header class="wrap hero">
-  <p class="kicker">2022/23 season · Premier League · La Liga · Champions League</p>
   <h1>What wins football matches?</h1>
-  <p class="lede">We compared 18 match stats across <span data-n="total">767</span> games to see which ones go with winning. One stat mattered far more than the rest, and the one most people point to mattered much less.</p>
+  <p class="lede">We compared 18 match stats across <span data-n="total">767</span> games from the 2022/23 Premier League, La Liga and Champions League.</p>
   <div class="versus">
     <div class="vs-card win">
       <div class="num" id="hero-sot">63%</div>
@@ -169,10 +166,9 @@ footer a { color: var(--ink2); }
 <section>
   <div class="explain">
     <div class="col">
-      <p class="eyebrow">First, the basics</p>
       <h2>What is a shot on target?</h2>
       <p>A shot is any attempt to score. It counts as <b>on target</b> when it is heading into the goal, so it either goes in or the goalkeeper has to stop it.</p>
-      <p class="muted">Shots that fly wide, hit the post or get blocked by a defender are shots, but not shots on target. Shooting often is easy. Hitting the target means a team got into a good position.</p>
+      <p class="muted">Shots that fly wide, hit the post or get blocked by a defender are shots, but not shots on target.</p>
     </div>
     <figure style="margin:0">
       <div class="goal" role="img" aria-label="Diagram of a goal: shots inside the goal frame are on target, shots outside it are off target.">
@@ -184,7 +180,6 @@ footer a { color: var(--ink2); }
 </section>
 
 <section>
-  <p class="eyebrow">The main finding</p>
   <h2>Every extra shot on target raises the odds of winning</h2>
   <p class="col muted">Each bar groups matches by how many more shots on target a team had than its opponent. Teams level on shots on target win just under four in ten. With three more than the opponent, they win two in three.</p>
   <div class="card">
@@ -199,7 +194,6 @@ footer a { color: var(--ink2); }
 </section>
 
 <section>
-  <p class="eyebrow">All 18 stats, ranked</p>
   <h2>Shots on target is far ahead of the rest</h2>
   <p class="col muted">How often a team won when it beat its opponent on each stat. Hover or tap a bar to see what the stat means. The dashed line is the average win rate.</p>
   <div class="card">
@@ -209,8 +203,7 @@ footer a { color: var(--ink2); }
 </section>
 
 <section>
-  <p class="eyebrow">The possession puzzle</p>
-  <h2>Good teams keep the ball. Keeping the ball doesn't win the game.</h2>
+  <h2>Possession matters over a season, not in a single match</h2>
   <div class="col">
     <p>Over a full season, teams that have more of the ball finish higher in the table. In a single match the link almost disappears.</p>
     <p class="muted">The reason is the score. A team that goes ahead often lets the other side have the ball and defends its lead. So the winner of a match frequently ends up with less possession, even though better teams have more of it over a season.</p>
@@ -233,8 +226,7 @@ footer a { color: var(--ink2); }
 </section>
 
 <section>
-  <p class="eyebrow">Stats that mislead</p>
-  <h2>Some numbers follow the score instead of creating it</h2>
+  <h2>Stats that follow the score</h2>
   <p class="col muted">Comparing a single match with a whole season shows which stats flip. A stat that goes with winning one game but with losing over a season is usually a reaction to the score.</p>
   <div class="pulls">
     <div class="pull"><div class="n" id="p-cross">33%</div><div class="t">Teams that sent in more <b>crosses</b> won only this often. Teams that are behind hit lots of balls into the box.</div></div>
@@ -250,8 +242,7 @@ footer a { color: var(--ink2); }
 </section>
 
 <section>
-  <p class="eyebrow">So what should a team do?</p>
-  <h2>Four lessons from the data</h2>
+  <h2>What teams can take from this</h2>
   <div class="tips">
     <div class="tipcard"><h3>Take better shots</h3><p>Shots on target predict wins far better than total shots. Work the ball into the box and shoot from good positions instead of trying from distance.</p></div>
     <div class="tipcard"><h3>Use the ball to create chances</h3><p>Teams with more of the ball don't win single matches much more often. Passing should move the ball forward and lead to shots.</p></div>
@@ -262,7 +253,6 @@ footer a { color: var(--ink2); }
 </section>
 
 <section class="tech">
-  <p class="eyebrow">For the curious</p>
   <h2>How the analysis works</h2>
   <div class="method col">
     <p><b>Data.</b> Match stats from ESPN for the 2022/23 Premier League, La Liga and Champions League (group stage onward). ESPN has no stats for 108 matches and 6 more can't produce ratio stats, which leaves <span id="n-used">293 Premier League, 351 La Liga and 123 Champions League</span> matches. Each match is seen from both teams' side.</p>
