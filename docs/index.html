@@ -121,6 +121,25 @@ p { margin: 0 0 16px; }
 .tipcard h3 { font-family: "Newsreader", Georgia, serif; font-size: 24px; font-weight: 600; line-height: 1.2; margin: 0 0 8px; }
 .tipcard p { color: var(--ink2); margin: 0; font-size: 16px; }
 
+/* styles */
+.styles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+@media (max-width: 760px) { .styles { grid-template-columns: 1fr; } }
+.scard { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; }
+.scard h3 { font-family: "Newsreader", Georgia, serif; font-size: 26px; font-weight: 600; line-height: 1.15; margin: 0 0 6px; }
+.scard .desc { color: var(--ink2); font-size: 15px; margin: 0 0 16px; }
+.scard .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 16px; }
+.scard .fact .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.scard .fact .l { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.mini { margin: 0 0 14px; }
+.mini .row { display: grid; grid-template-columns: 1fr 44px; gap: 8px; align-items: center; font-size: 13px; color: var(--ink2); margin-bottom: 6px; }
+.mini .row .track { grid-column: 1 / -1; height: 8px; background: var(--sunk); border-radius: 4px; overflow: hidden; margin-top: -2px; }
+.mini .row .track span { display: block; height: 100%; border-radius: 4px; }
+.mini .row b { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.scard .teams { font-size: 14px; color: var(--muted); margin: auto 0 0; line-height: 1.6; }
+.scard .teams b { color: var(--ink); font-weight: 600; }
+#t-classic td:last-child { white-space: normal; min-width: 240px; color: var(--ink2); text-align: left; }
+#t-classic th:last-child, #t-classic th:nth-child(2), #t-classic td:nth-child(2) { text-align: left; }
+
 /* technical */
 .tech { border-top: 1px solid var(--grid); margin-top: 72px; }
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 18px; }
@@ -238,6 +257,40 @@ footer a { color: var(--ink2); }
     <div class="legend"><span><i style="background:var(--muted)"></i>Single match</span><span><i style="background:var(--pos)"></i>Whole season</span></div>
     <div class="chart" id="c-flip"></div>
     <p class="small" style="margin:12px 0 0">Correlation from −1 to 1. Right of zero goes with winning, left goes with losing. Premier League and La Liga.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Different styles, same rule</h2>
+  <div class="col">
+    <p>We grouped the 40 Premier League and La Liga teams by how they play, using only style stats: possession, pass accuracy, long balls, crosses, clearances, fouls, tackles and interceptions. Four styles came out.</p>
+    <p class="muted">They finish at very different heights in the table. But in every style, teams won far more often when they had more shots on target than when they had more of the ball.</p>
+  </div>
+  <div class="styles" id="style-cards"></div>
+  <p class="small" style="margin-top:12px">Teams in bold are clear examples of their style. The rest sit closer to the line between two styles. Teams are listed by points per game.</p>
+
+  <div class="card">
+    <div class="seg" role="group" aria-label="Highlight a style" id="seg-style"></div>
+    <div class="grid2" style="gap:28px">
+      <div>
+        <h3>How each team plays</h3>
+        <p class="small" style="margin:0 0 10px">Possession against the share of passes that are long balls</p>
+        <div class="chart" id="c-stylemap"></div>
+      </div>
+      <div>
+        <h3>What decides their points</h3>
+        <p class="small" style="margin:0 0 10px">Shots on target compared with opponents, against points per game</p>
+        <div class="chart" id="c-stylesot"></div>
+      </div>
+    </div>
+    <div class="tiles" id="r2" style="margin:20px 0 0"></div>
+    <p class="small" style="margin:10px 0 0">Share of the differences in points per game between the 40 teams that each measure accounts for. Once you know a team's shots-on-target difference, knowing its style adds almost nothing.</p>
+  </div>
+
+  <div class="card">
+    <h3>Classic teams</h3>
+    <p class="small" style="margin:0 0 12px">Per-match averages, 2022/23. Shots on target are compared with the opponent.</p>
+    <div class="tablewrap"><table id="t-classic"></table></div>
   </div>
 </section>
 
@@ -596,16 +649,127 @@ function fill() {
   document.getElementById("tip-away").textContent = pct(aw);
 }
 
+/* ---------- styles of play ---------- */
+let hiStyle = "Control the ball";
+const STYLE_INFO = {
+  "Control the ball": { desc: "Keep the ball, pass short and patiently, make the opponent chase. Few long balls and few clearances.",
+    sig: s => [pct(s.pass_acc), "pass accuracy"] },
+  "Balanced": { desc: "About half the ball, a mix of short and long passing, and plenty of crosses from the wings.",
+    sig: s => [s.cross.toFixed(1), "crosses a match"] },
+  "Defend deep": { desc: "Let the opponent have the ball, defend near your own goal and win it back. Counter-attacking teams sit here.",
+    sig: s => [s.clear.toFixed(1), "clearances a match"] },
+  "Direct and physical": { desc: "Skip midfield with long balls, fight for the second ball, and accept a lot of fouls.",
+    sig: s => [pct(s.long), "of passes are long balls"] },
+};
+function styleCards() {
+  const S = R.styles, box = document.getElementById("style-cards");
+  box.innerHTML = S.order.map(st => {
+    const s = S.summary[st], w = S.within[st], info = STYLE_INFO[st], sig = info.sig(s);
+    const teams = S.teams.filter(t => t.style === st).sort((a, b) => b.ppg - a.ppg)
+      .map(t => t.stability >= 0.75 ? `<b>${t.team}</b>` : t.team).join(", ");
+    const bar = (label, v, col) => `<div class="row"><span>${label}</span><b>${pct(v)}</b><div class="track"><span style="width:${pct1(v)};background:var(${col})"></span></div></div>`;
+    return `<div class="scard"><h3>${st}</h3><p class="desc">${info.desc}</p>
+      <div class="facts">
+        <div class="fact"><div class="v">${s.ppg.toFixed(2)}</div><div class="l">points per game</div></div>
+        <div class="fact"><div class="v">${Math.round(s.poss)}%</div><div class="l">possession</div></div>
+        <div class="fact"><div class="v">${sig[0]}</div><div class="l">${sig[1]}</div></div>
+      </div>
+      <div class="mini">
+        ${bar("Won when they had more shots on target", w.win_more_sot, "--pos")}
+        ${bar("Won when they had more of the ball", w.win_more_poss, "--zero")}
+      </div>
+      <p class="teams">${teams}</p></div>`;
+  }).join("");
+}
+
+// greedy label placement: skip labels that would overlap one already placed
+function placeLabels(svg, pts, W) {
+  const boxes = [];
+  pts.forEach(p => {
+    const w = p.text.length * 6.4, h = 14;
+    for (const [dx, anchor] of [[9, "start"], [-9, "end"]]) {
+      const x0 = anchor === "start" ? p.x + dx : p.x + dx - w, y0 = p.y - 9;
+      if (x0 < 0 || x0 + w > W) continue;
+      if (boxes.some(b => x0 < b[0] + b[2] && x0 + w > b[0] && y0 < b[1] + b[3] && y0 + h > b[1])) continue;
+      boxes.push([x0, y0, w, h]);
+      txt(svg, p.x + dx, p.y + 4, p.text, { class: "val", "text-anchor": anchor });
+      break;
+    }
+  });
+}
+
+function styleScatter(id, xk, yk, { xmin, xmax, xstep, xfmt, ymin, ymax, ystep, yfmt, xlabel, ylabel }) {
+  const H = 300, l = 40, r = 10, t = 14, b = 40;
+  const [svg, W] = svgIn(id, H);
+  const x = v => l + (v - xmin) / (xmax - xmin) * (W - l - r), y = v => t + (1 - (v - ymin) / (ymax - ymin)) * (H - t - b);
+  for (let g = ymin; g <= ymax + 1e-9; g += ystep) {
+    el("line", { x1: l, x2: W - r, y1: y(g), y2: y(g), stroke: css(Math.abs(g - ymin) < 1e-9 ? "--axis" : "--grid") }, svg);
+    txt(svg, l - 6, y(g) + 4, yfmt(g), { "text-anchor": "end" });
+  }
+  const xs = W < 420 ? xstep * 2 : xstep;
+  for (let g = Math.ceil(xmin / xs) * xs; g <= xmax + 1e-9; g += xs) {
+    el("line", { x1: x(g), x2: x(g), y1: t, y2: H - b, stroke: css(g === 0 ? "--axis" : "--grid") }, svg);
+    txt(svg, x(g), H - b + 16, xfmt(g), { "text-anchor": "middle" });
+  }
+  txt(svg, l + (W - l - r) / 2, H - 4, xlabel, { "text-anchor": "middle", class: "lbl" });
+  txt(svg, l + 4, t + 2, ylabel, { class: "val" });
+  const T = R.styles.teams, hi = T.filter(d => d.style === hiStyle), lo = T.filter(d => d.style !== hiStyle);
+  const dot = (d, on) => {
+    el("circle", { cx: x(d[xk]), cy: y(d[yk]), r: on ? 6 : 4.5, fill: css(on ? "--pos" : "--zero"), stroke: css("--surface"), "stroke-width": 2, opacity: on ? 1 : .8 }, svg);
+  };
+  lo.forEach(d => dot(d, false)); hi.forEach(d => dot(d, true));
+  placeLabels(svg, hi.slice().sort((a, b) => b.ppg - a.ppg).slice(0, W < 420 ? 4 : 7).map(d => ({ x: x(d[xk]), y: y(d[yk]), text: d.team.replace(" & Hove Albion", "").replace("Wolverhampton Wanderers", "Wolves").replace("AFC ", "") })), W);
+  T.forEach(d => hover(el("circle", { cx: x(d[xk]), cy: y(d[yk]), r: 10, fill: "transparent" }, svg),
+    `<b>${d.team}</b> <span class="d">· ${d.style}</span><br>${d.ppg.toFixed(2)} points per game<br>Possession ${d.poss.toFixed(1)}% · long balls ${pct(d.long)}<br>Shots on target vs opponent ${f2(d.sot_diff)} a match`));
+}
+
+function styleCharts() {
+  document.querySelectorAll("#seg-style button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === hiStyle));
+  styleScatter("c-stylemap", "poss", "long", { xmin: 35, xmax: 70, xstep: 5, xfmt: v => v + "%", ymin: 0.05, ymax: 0.25, ystep: 0.05, yfmt: v => Math.round(v * 100) + "%",
+    xlabel: "Possession", ylabel: "Long-ball share" });
+  styleScatter("c-stylesot", "sot_diff", "ppg", { xmin: -3, xmax: 4, xstep: 1, xfmt: sgn, ymin: 0, ymax: 2.5, ystep: 0.5, yfmt: v => v.toFixed(1),
+    xlabel: "Shots on target vs opponent, per match", ylabel: "Points per game" });
+}
+
+function classicTable() {
+  const T = Object.fromEntries(R.styles.teams.map(d => [d.team, d])), U = R.styles.ucl;
+  const sot = n => f2(T[n].sot_diff), ga = n => T[n].ga.toFixed(2);
+  const rows = [
+    ["Manchester City", "Out-shot opponents on target by " + T["Manchester City"].sot_diff.toFixed(1) + " a match, the most of any team."],
+    ["Barcelona", "Same style, best defence: " + ga("Barcelona") + " goals conceded a match."],
+    ["Liverpool", `On the line between two styles. As much of the ball as the top teams, but more crosses, more goals conceded and a smaller shots-on-target edge than City.`],
+    ["Real Madrid", `${Math.round(T["Real Madrid"].poss)}% of the ball in La Liga, ${Math.round(U["Real Madrid"].ucl_poss)}% in the Champions League, still ahead on shots on target in both.`],
+    ["Brighton & Hove Albion", "Nearly as far ahead on shots on target as the top teams, but scored fewer of their chances and conceded more."],
+    ["Atlético Madrid", "Balanced on paper, built on defence: " + ga("Atlético Madrid") + " goals conceded a match."],
+    ["Manchester United", "Less of the ball than the elite, yet clearly ahead on shots on target and two points a match."],
+    ["Aston Villa", `Level with opponents on shots on target but ${T["Aston Villa"].ppg.toFixed(1)} points a match: ${T["Aston Villa"].conv.toFixed(2)} goals per shot on target.`],
+    ["Brentford", `${Math.round(T["Brentford"].poss)}% of the ball and behind on shots on target, but sharp finishing: ${T["Brentford"].conv.toFixed(2)} goals per shot on target.`],
+    ["Getafe", `The clearest direct team: the most long balls (${pct(T["Getafe"].long)}) and the lowest pass accuracy (${pct(T["Getafe"].pass_acc)}).`],
+  ];
+  let html = "<tr><th>Team</th><th>Style</th><th>Possession</th><th>Shots on target</th><th>Conceded</th><th>Points</th><th>What stands out</th></tr>";
+  html += rows.map(([n, note]) => { const d = T[n];
+    return `<tr><td>${n.replace(" & Hove Albion", "")}</td><td>${d.style}</td><td>${Math.round(d.poss)}%</td><td>${sot(n)}</td><td>${ga(n)}</td><td>${d.ppg.toFixed(2)}</td><td>${note}</td></tr>`; }).join("");
+  const I = U["Internazionale"];
+  html += `<tr><td>Inter <span class="small">(UCL)</span></td><td>—</td><td>${Math.round(I.ucl_poss)}%</td><td>${f2(I.ucl_sot_diff)}</td><td>${I.ucl_ga.toFixed(2)}</td><td>—</td><td>Reached the Champions League final with less of the ball than most opponents.</td></tr>`;
+  document.getElementById("t-classic").innerHTML = html;
+  const r2 = R.styles.r2;
+  document.getElementById("r2").innerHTML =
+    `<div class="tile"><div class="v">${Math.round(r2.style * 100)}%</div><div class="l">explained by style alone</div></div>` +
+    `<div class="tile"><div class="v">${Math.round(r2.sot * 100)}%</div><div class="l">explained by shots-on-target difference alone</div></div>` +
+    `<div class="tile"><div class="v">${Math.round(r2.both * 100)}%</div><div class="l">explained by both together</div></div>`;
+}
+
 function renderAll() {
   goal(); heroChart(); curveChart(); rankChart();
   scatter("c-sc-pos", "pos", "Possession vs opponent (points)");
   scatter("c-sc-sot", "sot", "Shots on target vs opponent");
-  flipChart(); coefChart();
+  flipChart(); coefChart(); styleCharts();
 }
 
 fetch("results.json").then(r => r.json()).then(data => {
   R = data;
-  fill(); legends(); tables();
+  fill(); legends(); tables(); styleCards(); classicTable();
+  seg("seg-style", R.styles.order, hiStyle, v => { hiStyle = v; styleCharts(); });
   seg("seg-rank", ["All", ...COMPS], rankComp, v => { rankComp = v; rankChart(); });
   seg("seg-coef", ["All", ...COMPS], coefComp, v => { coefComp = v; coefChart(); });
   renderAll();

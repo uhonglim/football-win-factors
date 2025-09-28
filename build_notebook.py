@@ -287,7 +287,168 @@ robust.round(3)
 
 md("The two sources give almost the same correlations, so the missing ESPN matches don't change the findings.")
 
-md("## 8. Export results for the website")
+md(r"""
+## 8. Team styles: how do different ways of playing relate to the stats and to winning?
+
+Each league team gets a style profile from its season averages of **how it plays**, not how well: possession, pass accuracy, long-ball share, crosses, clearances, fouls, tackles and interceptions.
+K-means groups the 40 Premier League and La Liga teams into four styles. Then we ask:
+1. How do the styles differ in their stats and results?
+2. Within each style, what separates the teams that win from the ones that don't?
+""")
+
+code(r"""
+from sklearn.cluster import KMeans
+import statsmodels.formula.api as smf
+
+raw = pd.read_csv("data/matches_2223.csv") if os.path.exists("data/matches_2223.csv") else pd.read_csv(URL)
+raw = raw[raw.groupby("event_id").totalPasses.transform("sum") > 0].copy()
+raw["win"] = (raw.goals > raw.goals_against).astype(int)
+raw["points"] = np.sign(raw.goals - raw.goals_against).map({1: 3, 0: 1, -1: 0})
+raw["long_share"] = raw.totalLongBalls / raw.totalPasses
+raw["pass_acc"] = raw.accuratePasses / raw.totalPasses
+o = raw[["event_id", "team", "shotsOnTarget", "totalShots", "possessionPct"]].rename(
+    columns={"team": "opponent", "shotsOnTarget": "opp_sot", "totalShots": "opp_shots", "possessionPct": "opp_poss"})
+raw = raw.merge(o, on=["event_id", "opponent"])
+raw["sot_diff"] = raw.shotsOnTarget - raw.opp_sot
+raw["poss_diff"] = raw.possessionPct - raw.opp_poss
+
+def profile(d):
+    t = d.groupby(["competition", "team"]).agg(
+        matches=("points", "size"), ppg=("points", "mean"), win=("win", "mean"),
+        poss=("possessionPct", "mean"), pass_acc=("pass_acc", "mean"), long=("long_share", "mean"),
+        cross=("totalCrosses", "mean"), clear=("totalClearance", "mean"), fouls=("foulsCommitted", "mean"),
+        tackles=("totalTackles", "mean"), inter=("interceptions", "mean"),
+        shots=("totalShots", "mean"), sot=("shotsOnTarget", "mean"), opp_shots=("opp_shots", "mean"), opp_sot=("opp_sot", "mean"),
+        gf=("goals", "mean"), ga=("goals_against", "mean"), sot_diff=("sot_diff", "mean")).reset_index()
+    t["conv"] = t.gf / t.sot            # goals per shot on target
+    return t
+
+STYLE_COLS = ["poss", "pass_acc", "long", "cross", "clear", "fouls", "tackles", "inter"]
+teams = profile(raw[raw.competition.isin(LEAGUES)])
+scaler = StandardScaler().fit(teams[STYLE_COLS])
+km = KMeans(4, n_init=500, random_state=0).fit(scaler.transform(teams[STYLE_COLS]))   # many restarts -> lowest-inertia split
+cen = pd.DataFrame(km.cluster_centers_, columns=STYLE_COLS)
+
+# Name each cluster from its centre (standardised units)
+names = {cen.poss.idxmax(): "Control the ball", (cen.fouls + cen.long).idxmax(): "Direct and physical"}
+rest = [i for i in range(4) if i not in names]
+names[max(rest, key=lambda i: cen.clear[i])] = "Defend deep"
+names[[i for i in range(4) if i not in names][0]] = "Balanced"
+teams["style"] = pd.Series(km.labels_).map(names)
+STYLES = ["Control the ball", "Balanced", "Defend deep", "Direct and physical"]
+
+# How stable is each team's group? Resample each team's matches 100 times, re-cluster,
+# and measure how often a team stays with the teams it was grouped with.
+lg_raw = raw[raw.competition.isin(LEAGUES)]
+base = km.labels_
+rng = np.random.default_rng(0)
+together = np.zeros((len(teams), len(teams)))
+B = 100
+for b in range(B):
+    boot = lg_raw.groupby(["competition", "team"]).sample(frac=1, replace=True, random_state=int(rng.integers(1e9)))
+    tb = profile(boot).set_index(["competition", "team"]).loc[list(zip(teams.competition, teams.team))]
+    lab = KMeans(4, n_init=10, random_state=b).fit_predict(scaler.transform(tb[STYLE_COLS]))
+    together += (lab[:, None] == lab[None, :])
+together /= B
+same = base[:, None] == base[None, :]
+np.fill_diagonal(same, False)
+teams["stability"] = [together[i, same[i]].mean() for i in range(len(teams))]
+print("How often each team stays with its group (1.0 = always):")
+print(teams.sort_values("stability", ascending=False)[["team", "stability"]].round(2).to_string(index=False))
+
+print("Cluster centres (standardised):")
+display(cen.rename(index=names).loc[STYLES].round(2))
+for st in STYLES:
+    g = teams[teams["style"] == st].sort_values("ppg", ascending=False)
+    print(f"{st} ({len(g)}): " + ", ".join(g.team))
+""")
+
+md(r"""
+**How clear-cut are the styles?** Only the extremes are sharply defined. The ball-control teams (Barcelona, Man City, Arsenal, Real Madrid, Brighton, Villarreal) stay together in 79% to 94% of the resamples, and the direct teams (Getafe, Mallorca, Cádiz) in about 75%. The balanced and defend-deep groups blend into each other: most of their teams stay together only about half the time. Styles are a spectrum, with clear examples at each end.
+""")
+
+code(r"""
+style_summary = teams.groupby("style")[["ppg", "win", "poss", "pass_acc", "long", "cross", "clear", "fouls",
+                                        "shots", "sot", "opp_sot", "gf", "ga", "sot_diff", "conv"]].mean().loc[STYLES]
+style_summary["teams"] = teams.groupby("style").size()
+style_summary.round(2)
+""")
+
+md(r"""
+**Styles differ a lot in results.** Teams that control the ball average about 2.0 points per game; teams that defend deep or play direct average about 1.1.
+But is that because of the style itself, or because of what the style produces in front of goal?
+""")
+
+code(r"""
+m_style = smf.ols("ppg ~ C(style)", teams).fit()
+m_sot = smf.ols("ppg ~ sot_diff", teams).fit()
+m_both = smf.ols("ppg ~ sot_diff + C(style)", teams).fit()
+p_style = m_both.compare_f_test(m_sot)[1]
+print(f"R² style only: {m_style.rsquared:.2f}")
+print(f"R² shots-on-target difference only: {m_sot.rsquared:.2f}")
+print(f"R² both: {m_both.rsquared:.2f}   (does style add anything once SoT difference is known? p = {p_style:.2f})")
+
+within = {}
+for st in STYLES:
+    g = teams[teams["style"] == st]; m = raw[raw.team.isin(g.team) & raw.competition.isin(LEAGUES)]
+    within[st] = {"r_sot_ppg": g.ppg.corr(g.sot_diff), "r_poss_ppg": g.ppg.corr(g.poss),
+                  "win_more_sot": m[m.sot_diff > 0].win.mean(), "win_more_poss": m[m.poss_diff > 0].win.mean(),
+                  "win_less_poss": m[m.poss_diff < 0].win.mean()}
+pd.DataFrame(within).T.round(2)
+""")
+
+code(r"""
+fig, axes = plt.subplots(1, 4, figsize=(18, 4.5), sharex=True, sharey=True)
+for ax, st in zip(axes, STYLES):
+    ax.scatter(teams.sot_diff, teams.ppg, color="#d0d0d0", s=25)
+    g = teams[teams["style"] == st]
+    ax.scatter(g.sot_diff, g.ppg, color="#2a78d6", s=40)
+    for _, r in g.iterrows():
+        ax.annotate(r.team, (r.sot_diff, r.ppg), fontsize=7, alpha=.8)
+    ax.set_title(st); ax.set_xlabel("Avg shots-on-target difference")
+axes[0].set_ylabel("Points per game")
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+**What this shows**
+- Shots-on-target difference explains 68% of the spread in points per game; style alone explains 46%. With both, style adds nothing (p ≈ 0.9). **Style matters only through the shots on target it creates and allows.**
+- Within every style, the teams that out-shoot their opponents on target collect more points (r = 0.49 to 0.72).
+- Possession behaves differently by style. For ball-control teams, more of the ball goes with winning. Direct teams won only 20% of the matches where they had more of the ball, and 32% when they had less: forced to build play, they struggle.
+""")
+
+md("### Classic teams")
+
+code(r"""
+CLASSIC = ["Manchester City", "Barcelona", "Liverpool", "Real Madrid", "Brighton & Hove Albion",
+           "Atlético Madrid", "Manchester United", "Aston Villa", "Brentford", "Getafe"]
+classic = teams[teams.team.isin(CLASSIC)].set_index("team").loc[CLASSIC]
+display(classic[["style", "poss", "pass_acc", "long", "fouls", "clear", "sot_diff", "conv", "ga", "ppg"]].round(2))
+
+# Champions League: the same teams in big matches
+ucl = profile(raw[raw.competition == "Champions League"]).set_index("team")
+ucl_cases = {}
+for tm in ["Real Madrid", "Manchester City", "Internazionale"]:
+    row = {"ucl_poss": ucl.loc[tm, "poss"], "ucl_sot_diff": ucl.loc[tm, "sot_diff"], "ucl_ga": ucl.loc[tm, "ga"], "ucl_matches": ucl.loc[tm, "matches"]}
+    if tm in teams.team.values:
+        lr = teams.set_index("team").loc[tm]; row.update({"league_poss": lr.poss, "league_sot_diff": lr.sot_diff})
+    ucl_cases[tm] = row
+pd.DataFrame(ucl_cases).T.round(2)
+""")
+
+md(r"""
+- **Manchester City and Barcelona** are the purest ball-control teams: about two-thirds of the ball, 89% pass accuracy, few long balls, and opponents held to around 7 to 8 shots a game.
+- **Liverpool** sit on the border between ball control and the balanced group (the least settled team, staying with its group only 36% of the time). They had 61% of the ball like the top teams, but sent in more crosses, conceded more (1.19 a game) and out-shot opponents on target by less (+1.5 vs City's +3.3). That gap matches their drop to 1.81 points per game.
+- **Brighton** out-shoot opponents on target almost as much as the top teams (+2.5) but score fewer of their chances and concede more, so they finish lower.
+- **Real Madrid** control the ball in La Liga (61%) but have much less of it in the Champions League (54%) while still creating more shots on target than opponents.
+- **Atlético Madrid** sit in the balanced group but concede only 0.89 goals a game, the classic strong-defence team.
+- **Manchester United and Aston Villa** are the success stories of the defend-deep group (both near its edge): less of the ball, yet positive shots-on-target differences and about 2 points per game. This group is where counter-attacking teams sit, though the data here can't measure how fast attacks are.
+- **Brentford** turn shots on target into goals as well as most top teams (0.38 goals per shot on target) despite 41% possession.
+- **Getafe** are the clearest direct team: 40% possession, the most long balls (21%), the lowest pass accuracy (69%) and one of the highest foul counts (16 a game).
+- **Inter** reached the Champions League final with 45% possession, conceding 0.85 goals a game.
+""")
+
+md("## 9. Export results for the website")
 
 code(r"""
 def ser(s): return {str(k): (None if pd.isna(v) else round(float(v), 4)) for k, v in s.items()}
@@ -308,6 +469,15 @@ out = {
     "sot_counts": ser(counts.rename(lambda x: str(int(x)))),
     "home": {c: ser(home.loc[c]) for c in COMPS},
     "robust": {f"{a}|{b}": ser(robust[(a, b)]) for a, b in robust.columns},
+    "styles": {
+        "order": STYLES,
+        "teams": [{k: (round(float(v), 4) if isinstance(v, (float, np.floating)) else (int(v) if isinstance(v, (np.integer,)) else v))
+                   for k, v in r.items()} for r in teams.drop(columns=["tackles", "inter"]).to_dict(orient="records")],
+        "summary": {st: ser(style_summary.loc[st]) for st in STYLES},
+        "within": {st: ser(pd.Series(v)) for st, v in within.items()},
+        "r2": {"style": round(m_style.rsquared, 3), "sot": round(m_sot.rsquared, 3), "both": round(m_both.rsquared, 3), "p_style": round(p_style, 3)},
+        "ucl": {k: ser(pd.Series(v)) for k, v in ucl_cases.items()},
+    },
 }
 os.makedirs("docs", exist_ok=True)
 json.dump(out, open("docs/results.json", "w"), indent=1)
@@ -315,7 +485,7 @@ print("saved docs/results.json")
 """)
 
 md(r"""
-## 9. Conclusions
+## 10. Conclusions
 
 1. **Shots on target is the stat that matters most.** Correlation with winning is 0.46 to 0.60 per match and 0.82 per season, and its model importance is 2 to 4 times the next stat. With 3 more shots on target than the opponent, teams win 63% to 74% of the time; with 6 or more, over 84%.
 2. **Shots on target beat shots.** Total shots (r about 0.3) is much weaker than shots on target (r about 0.5). Quality beats quantity.
@@ -323,7 +493,8 @@ md(r"""
 4. **Read defending and crossing stats backwards.** Many clearances and long balls usually mean protecting a lead; many crosses usually mean chasing the game.
 5. **Discipline matters.** Red cards are negative in all three competitions, most of all in the Champions League (r = -0.29).
 6. **Home advantage is about 19 to 20 percentage points** (home teams win 48% to 50%, away teams 28% to 30%), almost identical across competitions.
-7. **All three competitions agree.** Stats explain the most in the Champions League (AUC 0.91), where the gap between teams is widest.
+7. **Style changes how a team gets its shots, not what wins.** Ball-control teams average about 2 points per game and defend-deep or direct teams about 1.1, but once shots-on-target difference is known, style adds nothing (p ≈ 0.9).
+8. **All three competitions agree.** Stats explain the most in the Champions League (AUC 0.91), where the gap between teams is widest.
 
 *Limitations:* stats and the score affect each other, so correlation is not causation; there is no expected-goals (xG) data; ESPN is missing stats for 108 matches (checked against the full football-data set, the main findings don't change); in Champions League knockouts, extra-time goals count and penalty shoot-outs are treated as draws.
 """)

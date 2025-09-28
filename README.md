@@ -13,6 +13,7 @@ We compared 18 match stats across 767 games from the 2022/23 Premier League, La 
 3. **Possession marks a strong team but doesn't decide a match.** Per match the correlation is 0.12; per season it is 0.68. Teams that lead often give up the ball.
 4. **Some stats follow the score.** Many clearances and long balls usually mean protecting a lead; many crosses usually mean chasing the game.
 5. **Red cards hurt** in all three competitions. **Home advantage** is about 20 percentage points.
+6. **Style changes how teams get their shots, not what wins.** Grouping the 40 league teams by how they play gives four styles: control the ball (Man City, Barcelona, Real Madrid, Arsenal), balanced, defend deep, and direct and physical (Getafe, Mallorca). Ball-control teams average 2.0 points per game and direct teams 1.1, but in every style teams won far more often with more shots on target (53% to 72%) than with more of the ball (20% to 61%). Once shots-on-target difference is known, style adds nothing (p = 0.89).
 
 **How to win:** take better shots, use the ball to create chances, keep eleven players on the pitch, and make home games count. These are patterns in the data, not guaranteed causes.
 
